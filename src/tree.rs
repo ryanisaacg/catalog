@@ -109,6 +109,17 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
                     }
                 };
 
+                if children.len() > MAX_ITEMS_IN_NODE {
+                    let new_node = self.split();
+                    let old_node = std::mem::take(self);
+                    let (new_first_key, _) = new_node.first().unwrap();
+                    *self = BNode::Branch {
+                        // TODO: can we avoid cloning here by storing references?
+                        intervals: vec![new_first_key.clone()],
+                        children: vec![old_node, new_node],
+                    };
+                }
+
                 val
             }
             BNode::Leaf(children) => {
@@ -144,7 +155,18 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
             BNode::Branch {
                 intervals,
                 children,
-            } => todo!(),
+            } => {
+                let children_halfway = children.len() / 2;
+                let split_children = children.drain(children_halfway..).collect();
+
+                let interval_halfway = intervals.len() / 2;
+                let split_interval = intervals.drain(interval_halfway..).collect();
+
+                BNode::Branch {
+                    intervals: split_interval,
+                    children: split_children,
+                }
+            }
             BNode::Leaf(children) => {
                 let halfway = children.len() / 2;
                 let split_children = children.drain(halfway..).collect();
