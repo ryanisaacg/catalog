@@ -34,10 +34,10 @@ mod tests {
     #[test]
     fn insert_many() {
         let mut tree = IntTree::new();
-        for i in 0..32 {
+        for i in (0..32).rev() {
             tree.insert(i, i.pow(2));
         }
-        for i in 0..32i32 {
+        for i in (0..32i32).rev() {
             assert_eq!(Some(&(i.pow(2))), tree.get(&i));
         }
     }
