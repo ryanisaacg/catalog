@@ -41,7 +41,7 @@ impl<K: Ord + Eq + Clone, V> BTree<K, V> {
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        None
+        self.root.remove(key)
     }
 
     pub fn iter<'a>(&'a self) -> BTreeIter<'a, K, V> {
@@ -90,25 +90,21 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
                 intervals,
                 children,
             } => {
-                let val = match children.len() {
-                    0 => {
-                        children.push(BNode::Leaf(vec![(key, val)]));
-                        None
-                    }
-                    _ => {
-                        let idx = find_idx_from_interval(intervals, &key);
-                        let previous_val = children[idx].insert(key, val);
-                        if children[idx].len() > MAX_ITEMS_IN_NODE {
-                            let new_node = children[idx].split();
-                            let (new_first_key, _) = new_node.first().unwrap();
-                            // TODO: can we avoid cloning here by storing references?
-                            intervals.insert(idx, new_first_key.clone());
-                            children.insert(idx + 1, new_node);
-                        }
-                        debug_assert!(children[idx].len() <= MAX_ITEMS_IN_NODE);
-                        previous_val
-                    }
-                };
+                if children.is_empty() {
+                    children.push(BNode::Leaf(vec![(key, val)]));
+                    return None;
+                }
+
+                let idx = find_idx_from_interval(intervals, &key);
+                let previous_val = children[idx].insert(key, val);
+                if children[idx].len() > MAX_ITEMS_IN_NODE {
+                    let new_node = children[idx].split();
+                    let (new_first_key, _) = new_node.first().unwrap();
+                    // TODO: can we avoid cloning here by storing references?
+                    intervals.insert(idx, new_first_key.clone());
+                    children.insert(idx + 1, new_node);
+                }
+                debug_assert!(children[idx].len() <= MAX_ITEMS_IN_NODE);
 
                 if children.len() > MAX_ITEMS_IN_NODE {
                     let new_node = self.split();
@@ -121,7 +117,7 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
                     };
                 }
 
-                val
+                previous_val
             }
             BNode::Leaf(children) => {
                 match children.binary_search_by(|child_key| child_key.0.cmp(&key)) {
@@ -134,6 +130,30 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
                         children.insert(idx, (key, val));
                         None
                     }
+                }
+            }
+        }
+    }
+
+    fn remove(&mut self, key: &K) -> Option<V> {
+        match self {
+            BNode::Branch {
+                intervals,
+                children,
+            } => {
+                if children.is_empty() {
+                    return None;
+                }
+
+                let idx = find_idx_from_interval(intervals, &key);
+                let previous_val = children[idx].remove(key);
+
+                previous_val
+            }
+            BNode::Leaf(children) => {
+                match children.binary_search_by(|child_key| child_key.0.cmp(&key)) {
+                    Ok(idx) => Some(children.remove(idx).1),
+                    Err(_) => None,
                 }
             }
         }

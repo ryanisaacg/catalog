@@ -62,7 +62,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn remove_value() {
         let mut tree = IntTree::new();
         tree.insert(1, 2);
@@ -70,5 +69,21 @@ mod tests {
         assert_eq!(val, Some(2));
         let children: Vec<_> = tree.iter().collect();
         assert_eq!(&children[..], &[]);
+    }
+
+    #[test]
+    fn remove_many() {
+        let mut tree = IntTree::new();
+        for i in 0..10 {
+            tree.insert(i, i);
+        }
+        for i in 0..10 {
+            if i % 2 == 0 {
+                assert_eq!(tree.remove(&i), Some(i));
+            }
+        }
+        for i in 0..10 {
+            assert_eq!(tree.get(&i), if i % 2 == 0 { None } else { Some(&i) });
+        }
     }
 }
