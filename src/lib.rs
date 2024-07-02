@@ -74,16 +74,16 @@ mod tests {
     #[test]
     fn remove_many() {
         let mut tree = IntTree::new();
-        for i in 0..10 {
+        for i in 0..25 {
             tree.insert(i, i);
         }
-        for i in 0..10 {
-            if i % 2 == 0 {
+        for i in 0..25 {
+            if i < 15 {
                 assert_eq!(tree.remove(&i), Some(i));
             }
         }
         for i in 0..10 {
-            assert_eq!(tree.get(&i), if i % 2 == 0 { None } else { Some(&i) });
+            assert_eq!(tree.get(&i), if i < 15 { None } else { Some(&i) });
         }
     }
 }
