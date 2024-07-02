@@ -68,14 +68,10 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
                 children[idx].get(key)
             }
             BNode::Leaf(children) => {
-                // TODO: binary search
-                children.iter().find_map(|(child_key, child_value)| {
-                    if key == child_key {
-                        Some(child_value)
-                    } else {
-                        None
-                    }
-                })
+                let idx = children
+                    .binary_search_by(|(child_key, _)| child_key.cmp(key))
+                    .ok()?;
+                Some(&children[idx].1)
             }
         }
     }
@@ -123,19 +119,17 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
                 val
             }
             BNode::Leaf(children) => {
-                let mut intended_idx = children.len();
-                for idx in 0..children.len() {
-                    let (child_key, child_value) = &mut children[idx];
-                    if &key == child_key {
+                match children.binary_search_by(|child_key| child_key.0.cmp(&key)) {
+                    Ok(idx) => {
+                        let (_, child_value) = &mut children[idx];
                         std::mem::swap(&mut val, child_value);
-                        return Some(val);
-                    } else if &key < child_key {
-                        intended_idx = idx;
-                        break;
+                        Some(val)
+                    }
+                    Err(idx) => {
+                        children.insert(idx, (key, val));
+                        None
                     }
                 }
-                children.insert(intended_idx, (key, val));
-                None
             }
         }
     }
