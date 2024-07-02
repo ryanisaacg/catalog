@@ -43,6 +43,25 @@ mod tests {
     }
 
     #[test]
+    fn get_mut() {
+        let mut tree = IntTree::new();
+        for i in 0..10 {
+            tree.insert(i, i);
+        }
+        for i in 0..10 {
+            let val = tree.get_mut(&i).unwrap();
+            if *val > 5 {
+                *val = 10;
+            } else {
+                *val = 0;
+            }
+        }
+        for i in 0..10 {
+            assert_eq!(*tree.get(&i).unwrap(), if i > 5 { 10 } else { 0 });
+        }
+    }
+
+    #[test]
     #[should_panic]
     fn remove_value() {
         let mut tree = IntTree::new();

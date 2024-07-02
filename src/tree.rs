@@ -37,7 +37,7 @@ impl<K: Ord + Eq + Clone, V> BTree<K, V> {
     }
 
     pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        None
+        self.root.get_mut(key)
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
@@ -54,7 +54,7 @@ impl<K: Ord + Eq + Clone, V> BTree<K, V> {
 const MAX_ITEMS_IN_NODE: usize = 4;
 
 impl<K: Ord + Eq + Clone, V> BNode<K, V> {
-    pub fn get(&self, key: &K) -> Option<&V> {
+    fn get(&self, key: &K) -> Option<&V> {
         match self {
             BNode::Branch {
                 intervals,
@@ -76,7 +76,29 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
         }
     }
 
-    pub fn insert(&mut self, key: K, mut val: V) -> Option<V> {
+    fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        match self {
+            BNode::Branch {
+                intervals,
+                children,
+            } => {
+                let mut idx = 0;
+                // TODO: binary search
+                while idx < intervals.len() && key >= &intervals[idx] {
+                    idx += 1;
+                }
+                children[idx].get_mut(key)
+            }
+            BNode::Leaf(children) => {
+                let idx = children
+                    .binary_search_by(|(child_key, _)| child_key.cmp(key))
+                    .ok()?;
+                Some(&mut children[idx].1)
+            }
+        }
+    }
+
+    fn insert(&mut self, key: K, mut val: V) -> Option<V> {
         match self {
             BNode::Branch {
                 intervals,
