@@ -18,6 +18,12 @@ impl<K: Ord + Eq + Clone, V> Default for BNode<K, V> {
     }
 }
 
+impl<K: Ord + Eq + Clone, V> Default for BTree<K, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K: Ord + Eq + Clone, V> BTree<K, V> {
     pub fn new() -> Self {
         BTree {
@@ -44,7 +50,7 @@ impl<K: Ord + Eq + Clone, V> BTree<K, V> {
         self.root.remove(key)
     }
 
-    pub fn iter<'a>(&'a self) -> BTreeIter<'a, K, V> {
+    pub fn iter(&self) -> BTreeIter<'_, K, V> {
         BTreeIter {
             stack: vec![(&self.root, 0)],
         }
@@ -145,13 +151,12 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
                     return None;
                 }
 
-                let idx = find_idx_from_interval(intervals, &key);
-                let previous_val = children[idx].remove(key);
+                let idx = find_idx_from_interval(intervals, key);
 
-                previous_val
+                children[idx].remove(key)
             }
             BNode::Leaf(children) => {
-                match children.binary_search_by(|child_key| child_key.0.cmp(&key)) {
+                match children.binary_search_by(|child_key| child_key.0.cmp(key)) {
                     Ok(idx) => Some(children.remove(idx).1),
                     Err(_) => None,
                 }
