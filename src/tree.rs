@@ -59,14 +59,7 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
             BNode::Branch {
                 intervals,
                 children,
-            } => {
-                let mut idx = 0;
-                // TODO: binary search
-                while idx < intervals.len() && key >= &intervals[idx] {
-                    idx += 1;
-                }
-                children[idx].get(key)
-            }
+            } => children[find_idx_from_interval(intervals, key)].get(key),
             BNode::Leaf(children) => {
                 let idx = children
                     .binary_search_by(|(child_key, _)| child_key.cmp(key))
@@ -81,14 +74,7 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
             BNode::Branch {
                 intervals,
                 children,
-            } => {
-                let mut idx = 0;
-                // TODO: binary search
-                while idx < intervals.len() && key >= &intervals[idx] {
-                    idx += 1;
-                }
-                children[idx].get_mut(key)
-            }
+            } => children[find_idx_from_interval(intervals, key)].get_mut(key),
             BNode::Leaf(children) => {
                 let idx = children
                     .binary_search_by(|(child_key, _)| child_key.cmp(key))
@@ -110,10 +96,7 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
                         None
                     }
                     _ => {
-                        let mut idx = 0;
-                        while idx < intervals.len() && &key >= &intervals[idx] {
-                            idx += 1;
-                        }
+                        let idx = find_idx_from_interval(intervals, &key);
                         let previous_val = children[idx].insert(key, val);
                         if children[idx].len() > MAX_ITEMS_IN_NODE {
                             let new_node = children[idx].split();
@@ -198,6 +181,21 @@ impl<K: Ord + Eq + Clone, V> BNode<K, V> {
                 children,
             } => children.len(),
             BNode::Leaf(children) => children.len(),
+        }
+    }
+}
+
+fn find_idx_from_interval<K: Ord>(intervals: &[K], key: &K) -> usize {
+    if intervals.is_empty() {
+        0
+    } else {
+        let halfway = intervals.len() / 2;
+        match key.cmp(&intervals[halfway]) {
+            std::cmp::Ordering::Less => find_idx_from_interval(&intervals[0..halfway], key),
+            std::cmp::Ordering::Equal => halfway + 1,
+            std::cmp::Ordering::Greater => {
+                halfway + 1 + find_idx_from_interval(&intervals[(halfway + 1)..], key)
+            }
         }
     }
 }
