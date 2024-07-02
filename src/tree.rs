@@ -32,6 +32,10 @@ impl<K: Ord + Eq, V> BTree<K, V> {
         None
     }
 
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        None
+    }
+
     pub fn iter<'a>(&'a self) -> BTreeIter<'a, K, V> {
         BTreeIter {
             stack: vec![(&self.root, 0)],
