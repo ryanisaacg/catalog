@@ -16,7 +16,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn insert_value() {
         let mut tree = IntTree::new();
         tree.insert(1, 2);
@@ -25,12 +24,22 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn get_value() {
         let mut tree = IntTree::new();
         tree.insert(1, 2);
         let val = tree.get(&1);
         assert_eq!(val, Some(&2));
+    }
+
+    #[test]
+    fn insert_many() {
+        let mut tree = IntTree::new();
+        for i in 0..32 {
+            tree.insert(i, i.pow(2));
+        }
+        for i in 0..32i32 {
+            assert_eq!(Some(&(i.pow(2))), tree.get(&i));
+        }
     }
 
     #[test]
