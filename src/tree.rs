@@ -1,8 +1,10 @@
-pub struct BTree<K: Ord + Eq, V> {
+#[derive(Debug)]
+pub struct BTree<K: Ord + Eq + Clone, V> {
     root: BNode<K, V>,
 }
 
-enum BNode<K: Ord + Eq, V> {
+#[derive(Debug)]
+enum BNode<K: Ord + Eq + Clone, V> {
     Branch {
         intervals: Vec<K>,
         children: Vec<BNode<K, V>>,
@@ -10,7 +12,13 @@ enum BNode<K: Ord + Eq, V> {
     Leaf(Vec<(K, V)>),
 }
 
-impl<K: Ord + Eq, V> BTree<K, V> {
+impl<K: Ord + Eq + Clone, V> Default for BNode<K, V> {
+    fn default() -> Self {
+        Self::Leaf(Vec::default())
+    }
+}
+
+impl<K: Ord + Eq + Clone, V> BTree<K, V> {
     pub fn new() -> Self {
         BTree {
             root: BNode::Branch {
@@ -43,7 +51,9 @@ impl<K: Ord + Eq, V> BTree<K, V> {
     }
 }
 
-impl<K: Ord + Eq, V> BNode<K, V> {
+const MAX_ITEMS_IN_NODE: usize = 4;
+
+impl<K: Ord + Eq + Clone, V> BNode<K, V> {
     pub fn get(&self, key: &K) -> Option<&V> {
         match self {
             BNode::Branch {
@@ -52,7 +62,7 @@ impl<K: Ord + Eq, V> BNode<K, V> {
             } => {
                 let mut idx = 0;
                 // TODO: binary search
-                while idx < intervals.len() && key < &intervals[idx] {
+                while idx < intervals.len() && key >= &intervals[idx] {
                     idx += 1;
                 }
                 children[idx].get(key)
@@ -75,19 +85,32 @@ impl<K: Ord + Eq, V> BNode<K, V> {
             BNode::Branch {
                 intervals,
                 children,
-            } => match children.len() {
-                0 => {
-                    children.push(BNode::Leaf(vec![(key, val)]));
-                    None
-                }
-                _ => {
-                    let mut idx = 0;
-                    while idx < intervals.len() && &key < &intervals[idx] {
-                        idx += 1;
+            } => {
+                let val = match children.len() {
+                    0 => {
+                        children.push(BNode::Leaf(vec![(key, val)]));
+                        None
                     }
-                    children[idx].insert(key, val)
-                } // TODO: assert that branch doesn't have too many children
-            },
+                    _ => {
+                        let mut idx = 0;
+                        while idx < intervals.len() && &key >= &intervals[idx] {
+                            idx += 1;
+                        }
+                        let previous_val = children[idx].insert(key, val);
+                        if children[idx].len() > MAX_ITEMS_IN_NODE {
+                            let new_node = children[idx].split();
+                            let (new_first_key, _) = new_node.first().unwrap();
+                            // TODO: can we avoid cloning here by storing references?
+                            intervals.insert(idx, new_first_key.clone());
+                            children.insert(idx + 1, new_node);
+                        }
+                        debug_assert!(children[idx].len() <= MAX_ITEMS_IN_NODE);
+                        previous_val
+                    }
+                };
+
+                val
+            }
             BNode::Leaf(children) => {
                 let mut intended_idx = children.len();
                 for idx in 0..children.len() {
@@ -95,7 +118,7 @@ impl<K: Ord + Eq, V> BNode<K, V> {
                     if &key == child_key {
                         std::mem::swap(&mut val, child_value);
                         return Some(val);
-                    } else if &key > child_key {
+                    } else if &key < child_key {
                         intended_idx = idx;
                         break;
                     }
@@ -105,13 +128,47 @@ impl<K: Ord + Eq, V> BNode<K, V> {
             }
         }
     }
+
+    fn first(&self) -> Option<&(K, V)> {
+        match self {
+            BNode::Branch {
+                intervals: _,
+                children,
+            } => children.first().and_then(|child| child.first()),
+            BNode::Leaf(children) => children.first(),
+        }
+    }
+
+    fn split(&mut self) -> Self {
+        match self {
+            BNode::Branch {
+                intervals,
+                children,
+            } => todo!(),
+            BNode::Leaf(children) => {
+                let halfway = children.len() / 2;
+                let split_children = children.drain(halfway..).collect();
+                BNode::Leaf(split_children)
+            }
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            BNode::Branch {
+                intervals: _,
+                children,
+            } => children.len(),
+            BNode::Leaf(children) => children.len(),
+        }
+    }
 }
 
-pub struct BTreeIter<'a, K: Ord + Eq, V> {
+pub struct BTreeIter<'a, K: Ord + Eq + Clone, V> {
     stack: Vec<(&'a BNode<K, V>, usize)>,
 }
 
-impl<'a, K: Ord + Eq, V> Iterator for BTreeIter<'a, K, V> {
+impl<'a, K: Ord + Eq + Clone, V> Iterator for BTreeIter<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
