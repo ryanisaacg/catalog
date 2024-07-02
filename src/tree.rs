@@ -1,10 +1,10 @@
 #[derive(Debug)]
-pub struct BTree<K: Ord + Eq + Clone, V: Clone> {
+pub struct BTree<K, V> {
     root: BNode<K, V>,
 }
 
 #[derive(Clone, Debug)]
-enum BNode<K: Ord + Eq + Clone, V: Clone> {
+enum BNode<K, V> {
     Branch {
         intervals: Vec<K>,
         children: Vec<BNode<K, V>>,
@@ -18,13 +18,13 @@ impl<K: Ord + Eq + Clone, V: Clone> Default for BNode<K, V> {
     }
 }
 
-impl<K: Ord + Eq + Clone, V: Clone> Default for BTree<K, V> {
+impl<K, V> Default for BTree<K, V> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<K: Ord + Eq + Clone, V: Clone> BTree<K, V> {
+impl<K, V> BTree<K, V> {
     pub fn new() -> Self {
         BTree {
             root: BNode::Branch {
@@ -34,6 +34,24 @@ impl<K: Ord + Eq + Clone, V: Clone> BTree<K, V> {
         }
     }
 
+    pub fn iter(&self) -> BTreeIter<'_, K, V> {
+        BTreeIter {
+            stack: vec![(&self.root, 0)],
+        }
+    }
+}
+
+impl<K: Ord, V> BTree<K, V> {
+    pub fn get(&self, key: &K) -> Option<&V> {
+        self.root.get(key)
+    }
+
+    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        self.root.get_mut(key)
+    }
+}
+
+impl<K: Ord + Eq + Clone, V: Clone> BTree<K, V> {
     pub fn insert(&mut self, key: K, val: V) -> Option<V>
     where
         K: std::fmt::Debug,
@@ -42,29 +60,15 @@ impl<K: Ord + Eq + Clone, V: Clone> BTree<K, V> {
         self.root.insert(key, val)
     }
 
-    pub fn get(&self, key: &K) -> Option<&V> {
-        self.root.get(key)
-    }
-
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        self.root.get_mut(key)
-    }
-
     pub fn remove(&mut self, key: &K) -> Option<V> {
         self.root.remove(key)
-    }
-
-    pub fn iter(&self) -> BTreeIter<'_, K, V> {
-        BTreeIter {
-            stack: vec![(&self.root, 0)],
-        }
     }
 }
 
 const MIN_ITEMS_IN_NODE: usize = 2;
 const MAX_ITEMS_IN_NODE: usize = 4;
 
-impl<K: Ord + Eq + Clone, V: Clone> BNode<K, V> {
+impl<K: Ord, V> BNode<K, V> {
     fn get(&self, key: &K) -> Option<&V> {
         match self {
             BNode::Branch {
@@ -95,11 +99,73 @@ impl<K: Ord + Eq + Clone, V: Clone> BNode<K, V> {
         }
     }
 
-    fn insert(&mut self, key: K, mut val: V) -> Option<V>
-    where
-        K: std::fmt::Debug,
-        V: std::fmt::Debug,
-    {
+    fn first(&self) -> Option<&(K, V)> {
+        match self {
+            BNode::Branch {
+                intervals: _,
+                children,
+            } => children.first().and_then(|child| child.first()),
+            BNode::Leaf(children) => children.first(),
+        }
+    }
+
+    fn split(&mut self) -> Self {
+        match self {
+            BNode::Branch {
+                intervals,
+                children,
+            } => {
+                let children_halfway = children.len() / 2;
+                let split_children = children.drain(children_halfway..).collect();
+
+                let interval_halfway = children_halfway - 1;
+                let split_interval = intervals.drain((interval_halfway + 1)..).collect();
+                intervals.remove(interval_halfway);
+
+                self.debug_validate_intervals();
+
+                BNode::Branch {
+                    intervals: split_interval,
+                    children: split_children,
+                }
+            }
+            BNode::Leaf(children) => {
+                let halfway = children.len() / 2;
+                let split_children = children.drain(halfway..).collect();
+                BNode::Leaf(split_children)
+            }
+        }
+    }
+
+    fn debug_validate_intervals(&self) {
+        #[cfg(debug_assertions)]
+        match self {
+            BNode::Branch {
+                intervals,
+                children,
+            } => {
+                debug_assert_eq!(intervals.len() + 1, children.len());
+                for i in 0..intervals.len() {
+                    debug_assert!(intervals[i] == children[i + 1].first().unwrap().0);
+                }
+            }
+            BNode::Leaf(_) => {}
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            BNode::Branch {
+                intervals: _,
+                children,
+            } => children.len(),
+            BNode::Leaf(children) => children.len(),
+        }
+    }
+}
+
+impl<K: Ord + Clone, V: Clone> BNode<K, V> {
+    fn insert(&mut self, key: K, mut val: V) -> Option<V> {
         match self {
             BNode::Branch {
                 intervals,
@@ -193,47 +259,6 @@ impl<K: Ord + Eq + Clone, V: Clone> BNode<K, V> {
         }
     }
 
-    fn first(&self) -> Option<&(K, V)> {
-        match self {
-            BNode::Branch {
-                intervals: _,
-                children,
-            } => children.first().and_then(|child| child.first()),
-            BNode::Leaf(children) => children.first(),
-        }
-    }
-
-    fn split(&mut self) -> Self
-    where
-        K: std::fmt::Debug,
-    {
-        match self {
-            BNode::Branch {
-                intervals,
-                children,
-            } => {
-                let children_halfway = children.len() / 2;
-                let split_children = children.drain(children_halfway..).collect();
-
-                let interval_halfway = children_halfway - 1;
-                let split_interval = intervals.drain((interval_halfway + 1)..).collect();
-                intervals.remove(interval_halfway);
-
-                self.debug_validate_intervals();
-
-                BNode::Branch {
-                    intervals: split_interval,
-                    children: split_children,
-                }
-            }
-            BNode::Leaf(children) => {
-                let halfway = children.len() / 2;
-                let split_children = children.drain(halfway..).collect();
-                BNode::Leaf(split_children)
-            }
-        }
-    }
-
     fn merged(&self, other: &Self) -> Self {
         let Some(other_first) = other.first() else {
             return self.clone();
@@ -284,34 +309,6 @@ impl<K: Ord + Eq + Clone, V: Clone> BNode<K, V> {
             },
         }
     }
-
-    fn len(&self) -> usize {
-        match self {
-            BNode::Branch {
-                intervals: _,
-                children,
-            } => children.len(),
-            BNode::Leaf(children) => children.len(),
-        }
-    }
-
-    fn debug_validate_intervals(&self)
-    where
-        K: std::fmt::Debug,
-    {
-        match self {
-            BNode::Branch {
-                intervals,
-                children,
-            } => {
-                debug_assert_eq!(intervals.len() + 1, children.len());
-                for i in 0..intervals.len() {
-                    debug_assert_eq!(intervals[i], children[i + 1].first().unwrap().0);
-                }
-            }
-            BNode::Leaf(_) => {}
-        }
-    }
 }
 
 fn find_idx_from_interval<K: Ord>(intervals: &[K], key: &K) -> usize {
@@ -329,11 +326,11 @@ fn find_idx_from_interval<K: Ord>(intervals: &[K], key: &K) -> usize {
     }
 }
 
-pub struct BTreeIter<'a, K: Ord + Eq + Clone, V: Clone> {
+pub struct BTreeIter<'a, K, V> {
     stack: Vec<(&'a BNode<K, V>, usize)>,
 }
 
-impl<'a, K: Ord + Eq + Clone, V: Clone> Iterator for BTreeIter<'a, K, V> {
+impl<'a, K, V> Iterator for BTreeIter<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
