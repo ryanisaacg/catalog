@@ -11,38 +11,35 @@ use self::context::{BranchEntry, NodeMut, NodeRef};
 
 pub struct BTree<'a, K, V> {
     ctx: BNodeContext<'a, K, V>,
-    root: NodeId,
 }
 
 impl<K: Ord + Clone + Debug, V: Clone + Debug> BTree<'_, K, V> {
     pub fn new(buffer: &mut [u8]) -> Self {
         let ctx = BNodeContext::new(buffer);
-        let (root, _) = unsafe { ctx.alloc_branch(0) };
-        BTree { ctx, root }
+        BTree { ctx }
+    }
+
+    pub fn load(buffer: &mut [u8]) -> Self {
+        let ctx = BNodeContext::load(buffer);
+        BTree { ctx }
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
-        get(&self.ctx, &self.root, key)
+        get(&self.ctx, self.ctx.root(), key)
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        let (new_root, old_value) = insert(&self.ctx, &self.root, key, value);
-        if let Some(mut new_root) = new_root {
-            std::mem::swap(&mut self.root, &mut new_root);
-            unsafe {
-                self.ctx.free(new_root);
-            }
+        let (new_root, old_value) = insert(&self.ctx, self.ctx.root(), key, value);
+        if let Some(new_root) = new_root {
+            self.ctx.replace_root(new_root);
         }
         old_value
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        let (new_root, old_value) = remove(&self.ctx, &self.root, key);
-        if let Some(mut new_root) = new_root {
-            std::mem::swap(&mut self.root, &mut new_root);
-            unsafe {
-                self.ctx.free(new_root);
-            }
+        let (new_root, old_value) = remove(&self.ctx, self.ctx.root(), key);
+        if let Some(new_root) = new_root {
+            self.ctx.replace_root(new_root);
         }
         old_value
     }

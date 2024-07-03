@@ -1,7 +1,8 @@
 mod memtree;
 mod tree;
 
-pub use memtree::BTree;
+pub use memtree::BTree as MemTree;
+pub use tree::BTree;
 
 #[cfg(test)]
 mod tests {
@@ -124,6 +125,29 @@ mod tests {
         }
         for i in 0..10 {
             assert_eq!(tree.get(&i), if i < 15 { None } else { Some(&i) });
+        }
+    }
+
+    #[test]
+    fn restore_from_buffer() {
+        let mut buffer = vec![0u8; 1024];
+        {
+            let mut tree = IntMemTree::new(&mut buffer[..]);
+            for i in 0..25 {
+                tree.insert(i, i);
+            }
+            for i in 0..25 {
+                if i < 15 {
+                    assert_eq!(tree.remove(&i), Some(i));
+                }
+            }
+        }
+
+        {
+            let tree = IntMemTree::load(&mut buffer[..]);
+            for i in 0..10 {
+                assert_eq!(tree.get(&i), if i < 15 { None } else { Some(&i) });
+            }
         }
     }
 }

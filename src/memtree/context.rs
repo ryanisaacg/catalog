@@ -102,6 +102,12 @@ pub struct BNodeContext<'a, K, V> {
     _v: PhantomData<V>,
 }
 
+#[repr(C)]
+struct BNodeContextHeader {
+    allocator: LockedHeap,
+    root: NodeId,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 enum NodeTag {
@@ -124,23 +130,75 @@ pub enum NodeMut<'a, K, V> {
 impl<K, V> BNodeContext<'_, K, V> {
     pub fn new(buffer: &mut [u8]) -> Self {
         let heap = LockedHeap::empty();
-        let size = buffer.len();
-        let heap_start = buffer.as_mut_ptr();
+        let heap_size = buffer.len() - std::mem::size_of::<BNodeContextHeader>();
+        let avaialable_heap_start =
+            buffer[std::mem::size_of::<BNodeContextHeader>()..].as_mut_ptr();
+        unsafe {
+            heap.lock().init(avaialable_heap_start, heap_size);
+        }
+
+        let header = BNodeContextHeader {
+            allocator: heap,
+            root: NodeId(0),
+        };
+        let header_ptr = buffer.as_mut_ptr() as *mut BNodeContextHeader;
+        let allocator = unsafe {
+            header_ptr.write(header);
+            &header_ptr.as_ref().unwrap().allocator
+        };
+
+        let ctx = BNodeContext {
+            allocator,
+            buffer: buffer.as_mut_ptr(),
+            _k: PhantomData,
+            _v: PhantomData,
+        };
+
+        // allocate root node
+        unsafe {
+            let (root, _) = ctx.alloc_branch(0);
+            let header = (ctx.buffer as *mut BNodeContextHeader).as_mut().unwrap();
+            header.root = root;
+        }
+
+        ctx
+    }
+
+    pub fn load(buffer: &mut [u8]) -> Self {
+        let buffer = buffer.as_mut_ptr();
 
         let allocator = unsafe {
-            heap.lock().init(heap_start, size);
-
-            let memory_region = heap.alloc(Layout::new::<LockedHeap>()) as *mut LockedHeap;
-            *memory_region = heap;
-
-            memory_region.as_ref().unwrap()
+            &(buffer as *const BNodeContextHeader)
+                .as_ref()
+                .unwrap()
+                .allocator
         };
 
         BNodeContext {
             allocator,
-            buffer: heap_start,
+            buffer,
             _k: PhantomData,
             _v: PhantomData,
+        }
+    }
+
+    pub fn root(&self) -> &NodeId {
+        dbg!(unsafe {
+            &(self.buffer as *const BNodeContextHeader)
+                .as_ref()
+                .unwrap()
+                .root
+        })
+    }
+
+    pub fn replace_root(&mut self, mut root: NodeId) {
+        unsafe {
+            let root_ref = &mut (self.buffer as *mut BNodeContextHeader)
+                .as_mut()
+                .unwrap()
+                .root;
+            std::mem::swap(root_ref, &mut root);
+            self.free(root);
         }
     }
 
@@ -229,21 +287,6 @@ impl<K, V> BNodeContext<'_, K, V> {
             std::mem::align_of::<NodeHeader>().max(std::mem::align_of::<LeafEntry<K, V>>()),
         )
         .unwrap()
-    }
-
-    fn alloc<T>(&self, value: T) -> NodeId {
-        let layout = Layout::new::<T>();
-
-        unsafe {
-            let ptr = self.allocator.alloc(layout);
-            assert!(!ptr.is_null());
-            (ptr as *mut T).write(value);
-            NodeId(
-                ptr.offset_from(self.buffer)
-                    .try_into()
-                    .expect("allocations must be within buffer"),
-            )
-        }
     }
 
     /// # Safety
