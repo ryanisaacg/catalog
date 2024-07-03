@@ -10,6 +10,8 @@ use linked_list_allocator::LockedHeap;
 // TODO: branch and leaf children are always MaybeUninit, and it's just part of the safety contract
 // to initialize them?
 
+// TODO: track capacity in the node header to allow nodes to grow and shrink a bit
+
 #[repr(C)]
 #[derive(Debug)]
 struct NodeHeader {
@@ -51,6 +53,28 @@ impl<K: Clone> Clone for BranchEntry<K> {
 pub struct Leaf<K, V> {
     header: NodeHeader,
     pub children: [LeafEntry<K, V>],
+}
+
+impl<K, V> Leaf<K, V> {
+    pub fn remove(&mut self, idx: usize) -> LeafEntry<K, V> {
+        assert!(idx < self.children.len());
+
+        // infallible
+        let ret;
+        unsafe {
+            // the place we are taking from.
+            let ptr = self.children.as_mut_ptr().add(idx);
+            // copy it out, unsafely having a copy of the value on
+            // the stack and in the vector at the same time.
+            ret = ptr::read(ptr);
+
+            // Shift everything down to fill in that spot.
+            ptr::copy(ptr.add(1), ptr, self.header.len - idx - 1);
+        }
+        self.header.len -= 1;
+
+        ret
+    }
 }
 
 #[repr(C)]

@@ -35,6 +35,17 @@ impl<K: Ord + Clone + Debug, V: Clone + Debug> BTree<'_, K, V> {
         }
         old_value
     }
+
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        let (new_root, old_value) = remove(&self.ctx, &self.root, key);
+        if let Some(mut new_root) = new_root {
+            std::mem::swap(&mut self.root, &mut new_root);
+            unsafe {
+                self.ctx.free(new_root);
+            }
+        }
+        old_value
+    }
 }
 
 fn get<'a, K: Ord + Debug, V: Debug>(
@@ -151,6 +162,53 @@ fn insert<'a, K: Ord + Clone + Debug, V: Clone + Debug>(
                 (Some(new_node_id), None)
             }
         },
+    }
+}
+
+fn remove<'a, K: Ord + Clone + Debug, V: Clone + Debug>(
+    ctx: &'a BNodeContext<'_, K, V>,
+    node_id: &NodeId,
+    key: &K,
+) -> (Option<NodeId>, Option<V>) {
+    match dbg!(unsafe { ctx.node_mut(node_id) }) {
+        NodeMut::Branch(branch) => {
+            if branch.children.is_empty() {
+                return (None, None);
+            }
+
+            let idx = find_idx_from_interval(&branch.children[..], key);
+            let child_node_id = &branch.children[idx].node_id;
+            // TODO: intervals can change
+            let (_new_node_id, previous_val) = remove(ctx, child_node_id, key);
+
+            /*if children[idx].len() < MIN_ITEMS_IN_NODE {
+                if idx > 0 {
+                    // TODO: This could be an expensive clone
+                    children[idx] = children[idx - 1].merged(&children[idx]);
+                    children.remove(idx - 1);
+                    intervals.remove(idx - 1);
+                } else if idx + 1 < children.len() {
+                    // TODO: This could be an expensive clone
+                    children[idx] = children[idx].merged(&children[idx + 1]);
+                    children.remove(idx + 1);
+                    intervals.remove(idx);
+                }
+            }
+            if children.len() > 1 {
+                debug_assert!(children[idx].len() >= MIN_ITEMS_IN_NODE);
+            }*/
+
+            (None, previous_val)
+        }
+        NodeMut::Leaf(leaf) => {
+            match leaf
+                .children
+                .binary_search_by(|child_key| child_key.key.cmp(key))
+            {
+                Ok(idx) => (None, Some(leaf.remove(idx).value)),
+                Err(_) => (None, None),
+            }
+        }
     }
 }
 

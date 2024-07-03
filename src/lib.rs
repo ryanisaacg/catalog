@@ -109,4 +109,21 @@ mod tests {
             assert_eq!(tree.get(&i), if i < 15 { None } else { Some(&i) });
         }
     }
+
+    #[test]
+    fn remove_mem_many() {
+        let mut buffer = vec![0u8; 1024];
+        let mut tree = IntMemTree::new(&mut buffer[..]);
+        for i in 0..25 {
+            tree.insert(i, i);
+        }
+        for i in 0..25 {
+            if i < 15 {
+                assert_eq!(tree.remove(&i), Some(i));
+            }
+        }
+        for i in 0..10 {
+            assert_eq!(tree.get(&i), if i < 15 { None } else { Some(&i) });
+        }
+    }
 }
