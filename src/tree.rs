@@ -12,6 +12,10 @@ enum BNode<K, V> {
     Leaf(Vec<(K, V)>),
 }
 
+struct Unsized<K, V> {
+    children: [(K, BNode<K, V>)],
+}
+
 impl<K: Ord + Eq + Clone, V: Clone> Default for BNode<K, V> {
     fn default() -> Self {
         Self::Leaf(Vec::default())

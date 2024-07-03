@@ -1,12 +1,14 @@
+mod memtree;
 mod tree;
 
-pub use tree::BTree;
+pub use memtree::BTree;
 
 #[cfg(test)]
 mod tests {
     use super::tree::BTree;
 
     type IntTree = BTree<i32, i32>;
+    type IntMemTree<'a> = super::memtree::BTree<'a, i32, i32>;
 
     #[test]
     fn empty_tree() {
@@ -24,6 +26,15 @@ mod tests {
     }
 
     #[test]
+    fn insert_mem_value() {
+        let mut buffer = vec![0u8; 1024];
+        let mut tree = IntMemTree::new(&mut buffer[..]);
+
+        tree.insert(1, 2);
+        assert_eq!(tree.get(&1), Some(&2));
+    }
+
+    #[test]
     fn get_value() {
         let mut tree = IntTree::new();
         tree.insert(1, 2);
@@ -34,6 +45,18 @@ mod tests {
     #[test]
     fn insert_many() {
         let mut tree = IntTree::new();
+        for i in (0..32).rev() {
+            tree.insert(i, i.pow(2));
+        }
+        for i in (0..32i32).rev() {
+            assert_eq!(Some(&(i.pow(2))), tree.get(&i));
+        }
+    }
+
+    #[test]
+    fn insert_mem_many() {
+        let mut buffer = vec![0u8; 1024];
+        let mut tree = IntMemTree::new(&mut buffer[..]);
         for i in (0..32).rev() {
             tree.insert(i, i.pow(2));
         }
