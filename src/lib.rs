@@ -6,6 +6,10 @@ pub use tree::BTree;
 
 #[cfg(test)]
 mod tests {
+    use std::{fs::File, io::Read};
+
+    use memmap2::MmapMut;
+
     use super::tree::BTree;
 
     type IntTree = BTree<i32, i32>;
@@ -149,5 +153,37 @@ mod tests {
                 assert_eq!(tree.get(&i), if i < 15 { None } else { Some(&i) });
             }
         }
+    }
+
+    #[test]
+    fn mmap() {
+        {
+            let file = File::create_new("memmap-test-file").unwrap();
+            file.set_len(1024).unwrap();
+            let mut mmap = unsafe { MmapMut::map_mut(&file).unwrap() };
+            let mut tree = IntMemTree::new(&mut mmap[..]);
+            for i in 0..25 {
+                tree.insert(i, i);
+            }
+            mmap.flush().unwrap();
+            for i in 0..25 {
+                if i < 15 {
+                    assert_eq!(tree.remove(&i), Some(i));
+                }
+            }
+            mmap.flush().unwrap();
+        }
+
+        {
+            let mut file = File::open("memmap-test-file").unwrap();
+            let mut buffer = Vec::new();
+            file.read_to_end(&mut buffer).unwrap();
+            let tree = IntMemTree::load(&mut buffer[..]);
+            for i in 0..10 {
+                assert_eq!(tree.get(&i), if i < 15 { None } else { Some(&i) });
+            }
+        }
+
+        std::fs::remove_file("memmap-test-file").unwrap();
     }
 }
